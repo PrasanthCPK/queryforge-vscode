@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { QueryResult, ExplainNode } from '../types';
+import type { QueryResult } from '../types';
 import type { IAdapter } from '../database/IAdapter';
 
 const PAGE_SIZE = 50;
@@ -14,6 +14,8 @@ export class ResultsPanel {
   private readonly panel: vscode.WebviewPanel;
   private currentSql: string | undefined;
   private currentAdapter: IAdapter | undefined;
+  private ready = false;
+  private pendingMessages: unknown[] = [];
 
   private constructor(
     panel: vscode.WebviewPanel,
@@ -30,6 +32,14 @@ export class ResultsPanel {
   }
 
   private async handleMessage(msg: { type: string; page?: number }): Promise<void> {
+    if (msg.type === 'ready') {
+      this.ready = true;
+      for (const m of this.pendingMessages) {
+        void this.panel.webview.postMessage(m);
+      }
+      this.pendingMessages = [];
+      return;
+    }
     if (msg.type === 'page' && msg.page !== undefined && this.currentSql && this.currentAdapter) {
       try {
         const result = await this.currentAdapter.queryPage(this.currentSql, msg.page, PAGE_SIZE);
@@ -37,6 +47,14 @@ export class ResultsPanel {
       } catch (err) {
         void this.panel.webview.postMessage({ type: 'error', message: (err as Error).message });
       }
+    }
+  }
+
+  private post(msg: unknown): void {
+    if (this.ready) {
+      void this.panel.webview.postMessage(msg);
+    } else {
+      this.pendingMessages.push(msg);
     }
   }
 
@@ -59,17 +77,12 @@ export class ResultsPanel {
     this.currentSql = sql;
     this.currentAdapter = adapter;
     this.panel.reveal(vscode.ViewColumn.Two, true);
-    void this.panel.webview.postMessage({ type: 'result', data: result });
-  }
-
-  showExplain(node: ExplainNode): void {
-    this.panel.reveal(vscode.ViewColumn.Two, true);
-    void this.panel.webview.postMessage({ type: 'explainResult', data: node });
+    this.post({ type: 'result', data: result });
   }
 
   showError(message: string): void {
     this.panel.reveal(vscode.ViewColumn.Two, true);
-    void this.panel.webview.postMessage({ type: 'error', message });
+    this.post({ type: 'error', message });
   }
 
   private buildHtml(): string {

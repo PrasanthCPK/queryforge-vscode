@@ -1,1 +1,320 @@
-(()=>{"use strict";(()=>{const n=acquireVsCodeApi();let e=null,t=0,r=1,o=-1,a="asc";document.body.innerHTML='\n<style>\n  :root {\n    --bg: var(--vscode-editor-background, #1e1e1e);\n    --fg: var(--vscode-editor-foreground, #d4d4d4);\n    --border: var(--vscode-panel-border, #3c3c3c);\n    --header-bg: var(--vscode-editorGroupHeader-tabsBackground, #252526);\n    --tab-bg: var(--vscode-tab-inactiveBackground, #2d2d2d);\n    --hover-bg: var(--vscode-list-hoverBackground, #2a2d2e);\n    --btn-bg: var(--vscode-button-background, #0e639c);\n    --btn-fg: var(--vscode-button-foreground, #fff);\n    --btn-hover: var(--vscode-button-hoverBackground, #1177bb);\n    --desc: var(--vscode-descriptionForeground, #888);\n    --error: var(--vscode-errorForeground, #f48771);\n    --warn-border: #ce9178;\n  }\n  * { box-sizing: border-box; margin: 0; padding: 0; }\n  body {\n    background: var(--bg);\n    color: var(--fg);\n    display: flex;\n    flex-direction: column;\n    height: 100vh;\n    font-family: var(--vscode-font-family, sans-serif);\n    font-size: 13px;\n    overflow: hidden;\n  }\n  #tabs {\n    display: flex;\n    align-items: center;\n    background: var(--header-bg);\n    border-bottom: 1px solid var(--border);\n    flex-shrink: 0;\n    padding: 0 8px;\n  }\n  .tab-btn {\n    background: var(--tab-bg);\n    color: var(--fg);\n    border: none;\n    border-bottom: 2px solid transparent;\n    padding: 8px 18px;\n    cursor: pointer;\n    font-size: 13px;\n    transition: background 0.1s;\n  }\n  .tab-btn.active {\n    background: var(--bg);\n    border-bottom-color: var(--btn-bg);\n  }\n  .tab-btn:hover:not(.active) { background: var(--hover-bg); }\n  #meta {\n    margin-left: auto;\n    font-size: 12px;\n    color: var(--desc);\n    padding: 0 8px;\n    white-space: nowrap;\n  }\n  #clearBtn {\n    background: none;\n    border: none;\n    color: var(--desc);\n    cursor: pointer;\n    font-size: 13px;\n    padding: 4px 8px;\n    border-radius: 3px;\n    transition: color 0.1s, background 0.1s;\n    flex-shrink: 0;\n  }\n  #clearBtn:hover { color: var(--error); background: var(--hover-bg); }\n  .tab-panel { flex: 1; overflow: auto; display: flex; flex-direction: column; }\n  .hidden { display: none !important; }\n  .placeholder {\n    padding: 32px;\n    color: var(--desc);\n    font-style: italic;\n    text-align: center;\n  }\n  #export-bar {\n    padding: 6px 12px;\n    background: var(--header-bg);\n    border-bottom: 1px solid var(--border);\n    flex-shrink: 0;\n    display: flex;\n    align-items: center;\n    gap: 8px;\n  }\n  #export-bar .meta { font-size: 12px; color: var(--desc); margin-left: auto; }\n  .export-btn {\n    background: var(--btn-bg);\n    color: var(--btn-fg);\n    border: none;\n    padding: 3px 12px;\n    border-radius: 3px;\n    cursor: pointer;\n    font-size: 12px;\n  }\n  .export-btn:hover { background: var(--btn-hover); }\n  #table-wrap { flex: 1; overflow: auto; }\n  #pagination {\n    display: flex;\n    align-items: center;\n    gap: 8px;\n    padding: 6px 12px;\n    background: var(--header-bg);\n    border-top: 1px solid var(--border);\n    flex-shrink: 0;\n    font-size: 12px;\n  }\n  .page-btn {\n    background: var(--tab-bg);\n    color: var(--fg);\n    border: 1px solid var(--border);\n    padding: 2px 10px;\n    border-radius: 3px;\n    cursor: pointer;\n    font-size: 12px;\n  }\n  .page-btn:hover:not(:disabled) { background: var(--hover-bg); }\n  .page-btn:disabled { opacity: 0.4; cursor: not-allowed; }\n  #page-info { color: var(--desc); }\n  table { border-collapse: collapse; width: 100%; }\n  thead th {\n    position: sticky;\n    top: 0;\n    background: var(--header-bg);\n    padding: 6px 12px;\n    text-align: left;\n    border-bottom: 1px solid var(--border);\n    cursor: pointer;\n    user-select: none;\n    white-space: nowrap;\n    font-weight: 600;\n  }\n  thead th:hover { background: var(--hover-bg); }\n  thead th.asc::after { content: \' ▲\'; font-size: 10px; }\n  thead th.desc::after { content: \' ▼\'; font-size: 10px; }\n  tbody tr:hover { background: var(--hover-bg); }\n  tbody td {\n    padding: 4px 12px;\n    border-bottom: 1px solid var(--border);\n    max-width: 320px;\n    overflow: hidden;\n    text-overflow: ellipsis;\n    white-space: nowrap;\n    font-family: var(--vscode-editor-font-family, monospace);\n  }\n  .null { color: var(--desc); font-style: italic; }\n  .error-msg { padding: 24px; color: var(--error); }\n  /* Explain tree */\n  .tree-root { padding: 16px; }\n  .tree-node { margin: 6px 0; }\n  .node-header {\n    display: flex;\n    align-items: baseline;\n    gap: 8px;\n    padding: 6px 10px;\n    border: 1px solid var(--border);\n    border-radius: 4px;\n    cursor: pointer;\n    user-select: none;\n    background: var(--tab-bg);\n  }\n  .node-header:hover { background: var(--hover-bg); }\n  .node-header.warn { border-color: var(--warn-border); }\n  .toggle { font-size: 10px; width: 10px; flex-shrink: 0; color: var(--desc); }\n  .op { font-weight: 600; font-size: 13px; }\n  .det { font-size: 11px; color: var(--desc); }\n  .node-children { margin-left: 20px; border-left: 2px solid var(--border); padding-left: 10px; }\n  .node-children.collapsed { display: none; }\n</style>\n<div id="tabs">\n  <button class="tab-btn active" data-tab="results">Results</button>\n  <button class="tab-btn" data-tab="explain">Explain Plan</button>\n  <span id="meta"></span>\n  <button id="clearBtn" title="Clear results">✕ Clear</button>\n</div>\n<div id="tab-results" class="tab-panel">\n  <p class="placeholder">Run a query to see results.</p>\n</div>\n<div id="tab-explain" class="tab-panel hidden">\n  <p class="placeholder">Run Explain to see the execution plan.</p>\n</div>\n';const d=document.getElementById("meta"),s=document.getElementById("tab-results"),i=document.getElementById("tab-explain");function l(n){document.querySelectorAll(".tab-btn").forEach(e=>e.classList.toggle("active",e.dataset.tab===n)),s.classList.toggle("hidden","results"!==n),i.classList.toggle("hidden","explain"!==n)}function c(){const i=e;if(!i)return;const l=i.totalRows??i.rowCount;if(d.textContent=`${l} row${1!==l?"s":""} · ${i.executionTimeMs}ms`,0===i.rows.length&&0===t)return void(s.innerHTML='<p class="placeholder">Query returned no rows.</p>');const p=function(n){const e=[...n.rows];if(o<0)return e;const t=n.columns[o];return e.sort((n,e)=>{const r=String(n[t]??""),o=String(e[t]??"");return"asc"===a?r.localeCompare(o):o.localeCompare(r)})}(i),u=50*t+1,v=50*t+p.length,x=i.columns.map((n,e)=>`<th${e===o?` class="${a}"`:""} data-i="${e}">${b(n)}</th>`).join(""),f=p.map(n=>`<tr>${i.columns.map(e=>{const t=n[e];return null==t?'<td class="null">NULL</td>':`<td title="${b(String(t))}">${b(String(t))}</td>`}).join("")}</tr>`).join(""),h=r>1?`\n    <div id="pagination">\n      <button class="page-btn" id="prevBtn" ${0===t?"disabled":""}>◀ Prev</button>\n      <span id="page-info">Rows ${u}–${v} of ${l} · Page ${t+1} of ${r}</span>\n      <button class="page-btn" id="nextBtn" ${t>=r-1?"disabled":""}>Next ▶</button>\n    </div>`:`\n    <div id="pagination">\n      <span id="page-info">Rows 1–${p.length} of ${l}</span>\n    </div>`;s.innerHTML=`\n    <div id="export-bar">\n      <button class="export-btn" id="csvBtn">⬇ Export CSV</button>\n      <span class="meta">${l} row${1!==l?"s":""} · ${i.executionTimeMs}ms</span>\n    </div>\n    <div id="table-wrap">\n      <table>\n        <thead><tr>${x}</tr></thead>\n        <tbody>${f}</tbody>\n      </table>\n    </div>\n    ${h}\n  `,s.querySelectorAll("thead th").forEach(n=>{n.addEventListener("click",()=>{const e=parseInt(n.dataset.i);a=o===e&&"asc"===a?"desc":"asc",o=e,c()})}),document.getElementById("csvBtn").addEventListener("click",()=>function(n){const e=[n.columns.map(g).join(","),...n.rows.map(e=>n.columns.map(n=>g(String(e[n]??""))).join(","))].join("\n"),t=new Blob([e],{type:"text/csv"}),r=URL.createObjectURL(t),o=document.createElement("a");o.href=r,o.download="results.csv",o.click(),URL.revokeObjectURL(r)}(i)),document.getElementById("prevBtn")?.addEventListener("click",()=>{n.postMessage({type:"page",page:t-1})}),document.getElementById("nextBtn")?.addEventListener("click",()=>{n.postMessage({type:"page",page:t+1})})}function p(n){const e=n.children.length>0,t=/full|all/i.test(n.operation),r=Object.entries(n.details).filter(([,n])=>null!=n).map(([n,e])=>`${n}: ${e}`).join(" · ");return`<div class="tree-node">\n    <div class="node-header${t?" warn":""}">\n      <span class="toggle">${e?"▼":" "}</span>\n      <span class="op">${b(n.operation)}</span>\n      ${r?`<span class="det">${b(r)}</span>`:""}\n    </div>\n    ${e?`<div class="node-children">${n.children.map(p).join("")}</div>`:""}\n  </div>`}function b(n){return n.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;")}function g(n){return n.includes(",")||n.includes('"')||n.includes("\n")?`"${n.replace(/"/g,'""')}"`:n}document.getElementById("clearBtn").addEventListener("click",()=>{e=null,t=0,r=1,o=-1,a="asc",d.textContent="",s.innerHTML='<p class="placeholder">Run a query to see results.</p>',i.innerHTML='<p class="placeholder">Run Explain to see the execution plan.</p>',l("results")}),document.querySelectorAll(".tab-btn").forEach(n=>{n.addEventListener("click",()=>l(n.dataset.tab))}),window.addEventListener("message",n=>{const d=n.data;switch(d.type){case"result":{const n=d.data,s=n.totalRows??n.rowCount;r=Math.max(1,Math.ceil(s/50)),void 0!==d.page?(t=d.page,e=n,o=-1,a="asc"):(e=n,t=0,o=-1,a="asc"),c(),l("results");break}case"explainResult":g=d.data,i.innerHTML=`<div class="tree-root">${p(g)}</div>`,i.querySelectorAll(".node-header").forEach(n=>{n.addEventListener("click",()=>{const e=n.nextElementSibling;e&&(e.classList.toggle("collapsed"),n.querySelector(".toggle").textContent=e.classList.contains("collapsed")?"▶":"▼")})}),l("explain");break;case"error":s.innerHTML=`<p class="error-msg">Error: ${b(d.message??"Unknown error")}</p>`,l("results")}var g})})()})();
+/******/ (() => { // webpackBootstrap
+/******/ 	"use strict";
+var __webpack_exports__ = {};
+// This entry needs to be wrapped in an IIFE because it uses a non-standard name for the exports (exports).
+(() => {
+var exports = __webpack_exports__;
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+const vscode = acquireVsCodeApi();
+const PAGE_SIZE = 50;
+let currentResult = null;
+let currentPage = 0;
+let totalPages = 1;
+let sortCol = -1;
+let sortDir = 'asc';
+document.body.innerHTML = `
+<style>
+  :root {
+    --bg: var(--vscode-editor-background, #1e1e1e);
+    --fg: var(--vscode-editor-foreground, #d4d4d4);
+    --border: var(--vscode-panel-border, #3c3c3c);
+    --header-bg: var(--vscode-editorGroupHeader-tabsBackground, #252526);
+    --tab-bg: var(--vscode-tab-inactiveBackground, #2d2d2d);
+    --hover-bg: var(--vscode-list-hoverBackground, #2a2d2e);
+    --btn-bg: var(--vscode-button-background, #0e639c);
+    --btn-fg: var(--vscode-button-foreground, #fff);
+    --btn-hover: var(--vscode-button-hoverBackground, #1177bb);
+    --desc: var(--vscode-descriptionForeground, #888);
+    --error: var(--vscode-errorForeground, #f48771);
+    --warn-border: #ce9178;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    font-family: var(--vscode-font-family, sans-serif);
+    font-size: 13px;
+    overflow: hidden;
+  }
+  #toolbar {
+    display: flex;
+    align-items: center;
+    background: var(--header-bg);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    padding: 0 8px;
+    height: 35px;
+  }
+  #meta {
+    margin-left: auto;
+    font-size: 12px;
+    color: var(--desc);
+    padding: 0 8px;
+    white-space: nowrap;
+  }
+  #clearBtn {
+    margin-left: auto;
+    background: none;
+    border: none;
+    color: var(--desc);
+    cursor: pointer;
+    font-size: 13px;
+    padding: 4px 8px;
+    border-radius: 3px;
+    transition: color 0.1s, background 0.1s;
+    flex-shrink: 0;
+  }
+  #clearBtn:hover { color: var(--error); background: var(--hover-bg); }
+  #results-panel { flex: 1; overflow: auto; display: flex; flex-direction: column; }
+  .placeholder {
+    padding: 32px;
+    color: var(--desc);
+    font-style: italic;
+    text-align: center;
+  }
+  #export-bar {
+    padding: 6px 12px;
+    background: var(--header-bg);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  #export-bar .meta { font-size: 12px; color: var(--desc); margin-left: auto; }
+  .export-btn {
+    background: var(--btn-bg);
+    color: var(--btn-fg);
+    border: none;
+    padding: 3px 12px;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 12px;
+  }
+  .export-btn:hover { background: var(--btn-hover); }
+  #table-wrap { flex: 1; overflow: auto; }
+  #pagination {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    background: var(--header-bg);
+    border-top: 1px solid var(--border);
+    flex-shrink: 0;
+    font-size: 12px;
+  }
+  .page-btn {
+    background: var(--tab-bg);
+    color: var(--fg);
+    border: 1px solid var(--border);
+    padding: 2px 10px;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 12px;
+  }
+  .page-btn:hover:not(:disabled) { background: var(--hover-bg); }
+  .page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  #page-info { color: var(--desc); }
+  table { border-collapse: collapse; width: 100%; }
+  thead th {
+    position: sticky;
+    top: 0;
+    background: var(--header-bg);
+    padding: 6px 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+    font-weight: 600;
+  }
+  thead th:hover { background: var(--hover-bg); }
+  thead th.asc::after { content: ' ▲'; font-size: 10px; }
+  thead th.desc::after { content: ' ▼'; font-size: 10px; }
+  tbody tr:hover { background: var(--hover-bg); }
+  tbody td {
+    padding: 4px 12px;
+    border-bottom: 1px solid var(--border);
+    max-width: 320px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: var(--vscode-editor-font-family, monospace);
+  }
+  .null { color: var(--desc); font-style: italic; }
+  .error-msg { padding: 24px; color: var(--error); }
+  /* Explain tree */
+  .tree-root { padding: 16px; }
+  .tree-node { margin: 6px 0; }
+  .node-header {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 6px 10px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    cursor: pointer;
+    user-select: none;
+    background: var(--tab-bg);
+  }
+  .node-header:hover { background: var(--hover-bg); }
+  .node-header.warn { border-color: var(--warn-border); }
+  .toggle { font-size: 10px; width: 10px; flex-shrink: 0; color: var(--desc); }
+  .op { font-weight: 600; font-size: 13px; }
+  .det { font-size: 11px; color: var(--desc); }
+  .node-children { margin-left: 20px; border-left: 2px solid var(--border); padding-left: 10px; }
+  .node-children.collapsed { display: none; }
+</style>
+<div id="toolbar">
+  <span id="meta"></span>
+  <button id="clearBtn" title="Clear results">✕ Clear</button>
+</div>
+<div id="results-panel">
+  <p class="placeholder">Run a query to see results.</p>
+</div>
+`;
+const metaEl = document.getElementById('meta');
+const resultsPanel = document.getElementById('results-panel');
+const clearBtn = document.getElementById('clearBtn');
+clearBtn.addEventListener('click', () => {
+    currentResult = null;
+    currentPage = 0;
+    totalPages = 1;
+    sortCol = -1;
+    sortDir = 'asc';
+    metaEl.textContent = '';
+    resultsPanel.innerHTML = '<p class="placeholder">Run a query to see results.</p>';
+});
+window.addEventListener('message', (e) => {
+    const msg = e.data;
+    switch (msg.type) {
+        case 'result': {
+            const result = msg.data;
+            const total = result.totalRows ?? result.rowCount;
+            totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+            if (msg.page !== undefined) {
+                currentPage = msg.page;
+                currentResult = result;
+                sortCol = -1;
+                sortDir = 'asc';
+            }
+            else {
+                currentResult = result;
+                currentPage = 0;
+                sortCol = -1;
+                sortDir = 'asc';
+            }
+            renderTable();
+            break;
+        }
+        case 'error': {
+            metaEl.textContent = '';
+            resultsPanel.innerHTML = `<p class="error-msg">Error: ${esc(msg.message ?? 'Unknown error')}</p>`;
+            break;
+        }
+    }
+});
+function renderTable() {
+    const result = currentResult;
+    if (!result)
+        return;
+    const totalRowCount = result.totalRows ?? result.rowCount;
+    metaEl.textContent = `${totalRowCount} row${totalRowCount !== 1 ? 's' : ''} · ${result.executionTimeMs}ms`;
+    if (result.rows.length === 0 && currentPage === 0) {
+        resultsPanel.innerHTML = '<p class="placeholder">Query returned no rows.</p>';
+        return;
+    }
+    const pageRows = sortRows(result);
+    const startRow = currentPage * PAGE_SIZE + 1;
+    const endRow = currentPage * PAGE_SIZE + pageRows.length;
+    const headers = result.columns.map((col, i) => {
+        const cls = i === sortCol ? ` class="${sortDir}"` : '';
+        return `<th${cls} data-i="${i}">${esc(col)}</th>`;
+    }).join('');
+    const body = pageRows.map(row => `<tr>${result.columns.map(col => {
+        const v = row[col];
+        if (v === null || v === undefined)
+            return `<td class="null">NULL</td>`;
+        return `<td title="${esc(String(v))}">${esc(String(v))}</td>`;
+    }).join('')}</tr>`).join('');
+    const paginationHtml = totalPages > 1 ? `
+    <div id="pagination">
+      <button class="page-btn" id="prevBtn" ${currentPage === 0 ? 'disabled' : ''}>◀ Prev</button>
+      <span id="page-info">Rows ${startRow}–${endRow} of ${totalRowCount} · Page ${currentPage + 1} of ${totalPages}</span>
+      <button class="page-btn" id="nextBtn" ${currentPage >= totalPages - 1 ? 'disabled' : ''}>Next ▶</button>
+    </div>` : `
+    <div id="pagination">
+      <span id="page-info">Rows 1–${pageRows.length} of ${totalRowCount}</span>
+    </div>`;
+    resultsPanel.innerHTML = `
+    <div id="export-bar">
+      <button class="export-btn" id="csvBtn">⬇ Export CSV</button>
+      <span class="meta">${totalRowCount} row${totalRowCount !== 1 ? 's' : ''} · ${result.executionTimeMs}ms</span>
+    </div>
+    <div id="table-wrap">
+      <table>
+        <thead><tr>${headers}</tr></thead>
+        <tbody>${body}</tbody>
+      </table>
+    </div>
+    ${paginationHtml}
+  `;
+    resultsPanel.querySelectorAll('thead th').forEach(th => {
+        th.addEventListener('click', () => {
+            const i = parseInt(th.dataset['i']);
+            sortDir = sortCol === i && sortDir === 'asc' ? 'desc' : 'asc';
+            sortCol = i;
+            renderTable();
+        });
+    });
+    document.getElementById('csvBtn').addEventListener('click', () => exportCsv(result));
+    document.getElementById('prevBtn')?.addEventListener('click', () => {
+        vscode.postMessage({ type: 'page', page: currentPage - 1 });
+    });
+    document.getElementById('nextBtn')?.addEventListener('click', () => {
+        vscode.postMessage({ type: 'page', page: currentPage + 1 });
+    });
+}
+function sortRows(result) {
+    const rows = [...result.rows];
+    if (sortCol < 0)
+        return rows;
+    const col = result.columns[sortCol];
+    return rows.sort((a, b) => {
+        const av = String(a[col] ?? '');
+        const bv = String(b[col] ?? '');
+        return sortDir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av);
+    });
+}
+function exportCsv(result) {
+    const lines = [
+        result.columns.map(csvEsc).join(','),
+        ...result.rows.map(row => result.columns.map(c => csvEsc(String(row[c] ?? ''))).join(',')),
+    ].join('\n');
+    const blob = new Blob([lines], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'results.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+}
+function esc(s) {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+function csvEsc(v) {
+    return v.includes(',') || v.includes('"') || v.includes('\n')
+        ? `"${v.replace(/"/g, '""')}"`
+        : v;
+}
+vscode.postMessage({ type: 'ready' });
+
+})();
+
+/******/ })()
+;
+//# sourceMappingURL=webview-resultsPanel.js.map

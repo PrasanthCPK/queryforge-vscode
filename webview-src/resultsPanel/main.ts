@@ -14,13 +14,6 @@ interface QueryResult {
   executionTimeMs: number;
 }
 
-interface ExplainNode {
-  id: string;
-  operation: string;
-  details: Record<string, unknown>;
-  children: ExplainNode[];
-}
-
 const vscode = acquireVsCodeApi();
 
 const PAGE_SIZE = 50;
@@ -57,29 +50,15 @@ document.body.innerHTML = `
     font-size: 13px;
     overflow: hidden;
   }
-  #tabs {
+  #toolbar {
     display: flex;
     align-items: center;
     background: var(--header-bg);
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
     padding: 0 8px;
+    height: 35px;
   }
-  .tab-btn {
-    background: var(--tab-bg);
-    color: var(--fg);
-    border: none;
-    border-bottom: 2px solid transparent;
-    padding: 8px 18px;
-    cursor: pointer;
-    font-size: 13px;
-    transition: background 0.1s;
-  }
-  .tab-btn.active {
-    background: var(--bg);
-    border-bottom-color: var(--btn-bg);
-  }
-  .tab-btn:hover:not(.active) { background: var(--hover-bg); }
   #meta {
     margin-left: auto;
     font-size: 12px;
@@ -88,6 +67,7 @@ document.body.innerHTML = `
     white-space: nowrap;
   }
   #clearBtn {
+    margin-left: auto;
     background: none;
     border: none;
     color: var(--desc);
@@ -99,8 +79,7 @@ document.body.innerHTML = `
     flex-shrink: 0;
   }
   #clearBtn:hover { color: var(--error); background: var(--hover-bg); }
-  .tab-panel { flex: 1; overflow: auto; display: flex; flex-direction: column; }
-  .hidden { display: none !important; }
+  #results-panel { flex: 1; overflow: auto; display: flex; flex-direction: column; }
   .placeholder {
     padding: 32px;
     color: var(--desc);
@@ -200,23 +179,17 @@ document.body.innerHTML = `
   .node-children { margin-left: 20px; border-left: 2px solid var(--border); padding-left: 10px; }
   .node-children.collapsed { display: none; }
 </style>
-<div id="tabs">
-  <button class="tab-btn active" data-tab="results">Results</button>
-  <button class="tab-btn" data-tab="explain">Explain Plan</button>
+<div id="toolbar">
   <span id="meta"></span>
   <button id="clearBtn" title="Clear results">✕ Clear</button>
 </div>
-<div id="tab-results" class="tab-panel">
+<div id="results-panel">
   <p class="placeholder">Run a query to see results.</p>
-</div>
-<div id="tab-explain" class="tab-panel hidden">
-  <p class="placeholder">Run Explain to see the execution plan.</p>
 </div>
 `;
 
 const metaEl = document.getElementById('meta') as HTMLSpanElement;
-const resultsPanel = document.getElementById('tab-results') as HTMLDivElement;
-const explainPanel = document.getElementById('tab-explain') as HTMLDivElement;
+const resultsPanel = document.getElementById('results-panel') as HTMLDivElement;
 const clearBtn = document.getElementById('clearBtn') as HTMLButtonElement;
 
 clearBtn.addEventListener('click', () => {
@@ -227,26 +200,12 @@ clearBtn.addEventListener('click', () => {
   sortDir = 'asc';
   metaEl.textContent = '';
   resultsPanel.innerHTML = '<p class="placeholder">Run a query to see results.</p>';
-  explainPanel.innerHTML = '<p class="placeholder">Run Explain to see the execution plan.</p>';
-  switchTab('results');
 });
-
-document.querySelectorAll<HTMLButtonElement>('.tab-btn').forEach(btn => {
-  btn.addEventListener('click', () => switchTab(btn.dataset['tab']!));
-});
-
-function switchTab(name: string): void {
-  document.querySelectorAll('.tab-btn').forEach(b =>
-    b.classList.toggle('active', (b as HTMLElement).dataset['tab'] === name),
-  );
-  resultsPanel.classList.toggle('hidden', name !== 'results');
-  explainPanel.classList.toggle('hidden', name !== 'explain');
-}
 
 window.addEventListener('message', (e: MessageEvent) => {
   const msg = e.data as {
     type: string;
-    data?: QueryResult | ExplainNode;
+    data?: QueryResult;
     message?: string;
     page?: number;
   };
@@ -268,17 +227,11 @@ window.addEventListener('message', (e: MessageEvent) => {
         sortDir = 'asc';
       }
       renderTable();
-      switchTab('results');
-      break;
-    }
-    case 'explainResult': {
-      renderExplain(msg.data as ExplainNode);
-      switchTab('explain');
       break;
     }
     case 'error': {
+      metaEl.textContent = '';
       resultsPanel.innerHTML = `<p class="error-msg">Error: ${esc(msg.message ?? 'Unknown error')}</p>`;
-      switchTab('results');
       break;
     }
   }
@@ -380,36 +333,6 @@ function exportCsv(result: QueryResult): void {
   URL.revokeObjectURL(url);
 }
 
-function renderExplain(node: ExplainNode): void {
-  explainPanel.innerHTML = `<div class="tree-root">${nodeHtml(node)}</div>`;
-  explainPanel.querySelectorAll<HTMLElement>('.node-header').forEach(hdr => {
-    hdr.addEventListener('click', () => {
-      const children = hdr.nextElementSibling as HTMLElement | null;
-      if (!children) return;
-      children.classList.toggle('collapsed');
-      hdr.querySelector('.toggle')!.textContent = children.classList.contains('collapsed') ? '▶' : '▼';
-    });
-  });
-}
-
-function nodeHtml(node: ExplainNode): string {
-  const hasKids = node.children.length > 0;
-  const isWarn = /full|all/i.test(node.operation);
-  const det = Object.entries(node.details)
-    .filter(([, v]) => v !== null && v !== undefined)
-    .map(([k, v]) => `${k}: ${v}`)
-    .join(' · ');
-
-  return `<div class="tree-node">
-    <div class="node-header${isWarn ? ' warn' : ''}">
-      <span class="toggle">${hasKids ? '▼' : ' '}</span>
-      <span class="op">${esc(node.operation)}</span>
-      ${det ? `<span class="det">${esc(det)}</span>` : ''}
-    </div>
-    ${hasKids ? `<div class="node-children">${node.children.map(nodeHtml).join('')}</div>` : ''}
-  </div>`;
-}
-
 function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
@@ -419,3 +342,5 @@ function csvEsc(v: string): string {
     ? `"${v.replace(/"/g, '""')}"`
     : v;
 }
+
+vscode.postMessage({ type: 'ready' });
