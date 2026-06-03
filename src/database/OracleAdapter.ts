@@ -1,4 +1,4 @@
-import oracledb from 'oracledb';
+import type oracledb from 'oracledb';
 import { randomUUID } from 'crypto';
 import type { Connection } from '../types';
 import type { QueryResult, ExplainNode } from '../types';
@@ -14,15 +14,26 @@ interface PlanRow {
   COST: number | null;
 }
 
+// Loaded on first Oracle connection so the module factory never throws when
+// oracledb native bindings are absent in non-Oracle environments.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function loadOracledb(): typeof oracledb {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const mod = require('oracledb');
+  return (mod.default ?? mod) as typeof oracledb;
+}
+
 export class OracleAdapter implements IAdapter {
-  private connection: oracledb.Connection | null = null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private connection: any = null;
   private connected = false;
 
   constructor(private readonly config: Connection) {}
 
   async connect(password: string): Promise<void> {
-    oracledb.outFormat = oracledb.OUT_FORMAT_OBJECT;
-    this.connection = await oracledb.getConnection({
+    const odb = loadOracledb();
+    odb.outFormat = odb.OUT_FORMAT_OBJECT;
+    this.connection = await odb.getConnection({
       user: this.config.username,
       password,
       connectString: `${this.config.host}:${this.config.port}/${this.config.database}`,
@@ -32,9 +43,10 @@ export class OracleAdapter implements IAdapter {
 
   async query(sql: string): Promise<QueryResult> {
     if (!this.connection) throw new Error('Not connected');
+    const odb = loadOracledb();
     const start = Date.now();
     const result = await this.connection.execute(sql, [], {
-      outFormat: oracledb.OUT_FORMAT_OBJECT,
+      outFormat: odb.OUT_FORMAT_OBJECT,
     });
     const executionTimeMs = Date.now() - start;
 
@@ -57,12 +69,13 @@ export class OracleAdapter implements IAdapter {
       return this.query(sql);
     }
     if (!this.connection) throw new Error('Not connected');
+    const odb = loadOracledb();
     const offset = page * pageSize;
     const start = Date.now();
     const countResult = await this.connection.execute(
       `SELECT COUNT(*) AS "__total" FROM (${sql})`,
       [],
-      { outFormat: oracledb.OUT_FORMAT_OBJECT },
+      { outFormat: odb.OUT_FORMAT_OBJECT },
     );
     const countRows = countResult.rows as Record<string, unknown>[];
     const totalRows = Number(countRows[0]['__total'] ?? 0);
@@ -71,7 +84,7 @@ export class OracleAdapter implements IAdapter {
         SELECT t.*, ROWNUM AS "__qf_rn" FROM (${sql}) t WHERE ROWNUM <= ${offset + pageSize}
       ) WHERE "__qf_rn" > ${offset}`,
       [],
-      { outFormat: oracledb.OUT_FORMAT_OBJECT },
+      { outFormat: odb.OUT_FORMAT_OBJECT },
     );
     const executionTimeMs = Date.now() - start;
     const rawRows = (pageResult.rows as Record<string, unknown>[]).map(r => {
@@ -79,25 +92,26 @@ export class OracleAdapter implements IAdapter {
       void _rn;
       return rest;
     });
-    const columns = (pageResult.metaData?.map((m: { name: string }) => m.name) ?? []).filter(n => n !== '__qf_rn');
+    const columns = (pageResult.metaData?.map((m: { name: string }) => m.name) ?? []).filter((n: string) => n !== '__qf_rn');
     return { columns, rows: rawRows, rowCount: rawRows.length, totalRows, executionTimeMs };
   }
 
   async explain(sql: string): Promise<ExplainNode> {
     if (!this.connection) throw new Error('Not connected');
+    const odb = loadOracledb();
     const stmtId = `QF_${Date.now()}`;
 
     await this.connection.execute(
       `EXPLAIN PLAN SET STATEMENT_ID = '${stmtId}' FOR ${sql}`,
     );
 
-    const result = await this.connection.execute<PlanRow>(
+    const result = await this.connection.execute(
       `SELECT ID, PARENT_ID, OPERATION, OPTIONS, OBJECT_NAME, CARDINALITY, COST
        FROM PLAN_TABLE
        WHERE STATEMENT_ID = :stmtId
        ORDER BY ID`,
       { stmtId },
-      { outFormat: oracledb.OUT_FORMAT_OBJECT },
+      { outFormat: odb.OUT_FORMAT_OBJECT },
     );
 
     await this.connection.execute(
