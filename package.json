@@ -1,0 +1,176 @@
+{
+  "name": "queryforge-vscode",
+  "displayName": "Query Forge",
+  "description": "Execute SQL queries and visualize execution plans for MySQL/MariaDB and Oracle",
+  "version": "0.1.0",
+  "publisher": "queryforge",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Other"],
+  "activationEvents": [
+    "onLanguage:sql",
+    "onView:queryforgeConnections",
+    "onCommand:queryforge.openConsole"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "queryforge",
+          "title": "Query Forge",
+          "icon": "media/query-forge.svg"
+        }
+      ]
+    },
+    "views": {
+      "queryforge": [
+        {
+          "id": "queryforgeConnections",
+          "name": "Connections"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "queryforge.openConsole",
+        "title": "Query Forge: Open Console"
+      },
+      {
+        "command": "queryforge.addConnection",
+        "title": "Query Forge: Add Connection",
+        "icon": "$(add)"
+      },
+      {
+        "command": "queryforge.editConnection",
+        "title": "Query Forge: Edit Connection"
+      },
+      {
+        "command": "queryforge.deleteConnection",
+        "title": "Query Forge: Delete Connection"
+      },
+      {
+        "command": "queryforge.testConnection",
+        "title": "Query Forge: Test Connection"
+      },
+      {
+        "command": "queryforge.runQuery",
+        "title": "Query Forge: Run Query"
+      },
+      {
+        "command": "queryforge.explainQuery",
+        "title": "Query Forge: Explain Query"
+      },
+      {
+        "command": "queryforge.connectProfile",
+        "title": "Connect"
+      },
+      {
+        "command": "queryforge.disconnectProfile",
+        "title": "Disconnect"
+      },
+      {
+        "command": "queryforge.refreshConnections",
+        "title": "Query Forge: Refresh Connections",
+        "icon": "$(refresh)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "queryforge.addConnection",
+          "when": "view == queryforgeConnections",
+          "group": "navigation"
+        },
+        {
+          "command": "queryforge.refreshConnections",
+          "when": "view == queryforgeConnections",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "queryforge.connectProfile",
+          "when": "view == queryforgeConnections && viewItem == connectionDisconnected",
+          "group": "1_connection@1"
+        },
+        {
+          "command": "queryforge.disconnectProfile",
+          "when": "view == queryforgeConnections && viewItem == connectionConnected",
+          "group": "1_connection@1"
+        },
+        {
+          "command": "queryforge.openConsole",
+          "when": "view == queryforgeConnections && viewItem =~ /^connection/",
+          "group": "1_connection@2"
+        },
+        {
+          "command": "queryforge.testConnection",
+          "when": "view == queryforgeConnections && viewItem =~ /^connection/",
+          "group": "1_connection@3"
+        },
+        {
+          "command": "queryforge.editConnection",
+          "when": "view == queryforgeConnections && viewItem =~ /^connection/",
+          "group": "2_manage@1"
+        },
+        {
+          "command": "queryforge.deleteConnection",
+          "when": "view == queryforgeConnections && viewItem =~ /^connection/",
+          "group": "2_manage@2"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "queryforge.runQuery",
+          "when": "editorLangId == sql",
+          "group": "queryforge@1"
+        },
+        {
+          "command": "queryforge.explainQuery",
+          "when": "editorLangId == sql",
+          "group": "queryforge@2"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "queryforge.runQuery",
+        "key": "ctrl+shift+e",
+        "when": "editorLangId == sql && editorTextFocus"
+      },
+      {
+        "command": "queryforge.explainQuery",
+        "key": "ctrl+shift+x",
+        "when": "editorLangId == sql && editorTextFocus"
+      }
+    ],
+    "languages": [
+      {
+        "id": "sql",
+        "extensions": [".sql"],
+        "aliases": ["SQL", "sql"]
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run package",
+    "compile": "webpack",
+    "watch": "webpack --watch",
+    "package": "webpack --mode production --devtool hidden-source-map",
+    "lint": "eslint src --ext ts"
+  },
+  "dependencies": {
+    "mysql2": "^3.9.2",
+    "oracledb": "^6.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "ts-loader": "^9.5.1",
+    "typescript": "^5.3.3",
+    "webpack": "^5.90.0",
+    "webpack-cli": "^5.1.4"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "module": "commonjs",
+    "target": "ES2020",
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "strict": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "outDir": "./out",
+    "sourceMap": true,
+    "rootDir": ".",
+    "skipLibCheck": true
+  },
+  "include": ["src/**/*", "webview-src/**/*", "src/typings/**/*"],
+  "exclude": ["node_modules", "dist", "out"]
+}

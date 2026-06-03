@@ -1,0 +1,11 @@
+**/.git/**
+**/.vscode/**
+**/node_modules/.cache/**
+src/**
+webview-src/**
+out/**
+tsconfig.json
+webpack.config.js
+**/*.ts
+**/*.map
+.gitignore
