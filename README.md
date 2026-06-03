@@ -11,6 +11,64 @@ A VS Code extension for executing SQL queries and visualizing execution plans fo
 - **Results Table**: Sortable, scrollable data grid with row count, execution time, and CSV export
 - **Explain Plan Tree**: Visual collapsible tree of the query execution plan with cost/row estimates; full-table-scan nodes highlighted in amber
 
+## Installation
+
+### Option A — Install as a .vsix package (recommended for regular use)
+
+This produces a self-contained installable file.
+
+**Prerequisites:** [Node.js 18+](https://nodejs.org) and [Git](https://git-scm.com)
+
+```bash
+# 1. Clone the branch
+git clone --branch claude/query-forge-vscode-plugin-OAq3z \
+  https://github.com/PrasanthCPK/queryforge-vscode.git
+cd queryforge-vscode
+
+# 2. Install dependencies (mysql2, oracledb, and build tools)
+npm install
+
+# 3. Install the VS Code extension packager
+npm install -g @vscode/vsce
+
+# 4. Package the extension into a .vsix file
+vsce package --no-dependencies
+
+# 5. Install the generated .vsix into VS Code
+code --install-extension queryforge-vscode-0.1.0.vsix
+```
+
+Restart VS Code after step 5. The **Query Forge** icon will appear in the Activity Bar.
+
+> **Note:** `--no-dependencies` tells `vsce` to skip the marketplace dependency check.
+> The runtime dependencies (`mysql2`, `oracledb`) are loaded from `node_modules/`
+> which is included in the package.
+
+---
+
+### Option B — Run in Extension Development Host (for development / testing)
+
+No packaging required — VS Code launches a sandboxed instance with the extension loaded.
+
+**Prerequisites:** [Node.js 18+](https://nodejs.org), [Git](https://git-scm.com), and [VS Code](https://code.visualstudio.com)
+
+```bash
+# 1. Clone the branch
+git clone --branch claude/query-forge-vscode-plugin-OAq3z \
+  https://github.com/PrasanthCPK/queryforge-vscode.git
+cd queryforge-vscode
+
+# 2. Install dependencies
+npm install
+
+# 3. Open the folder in VS Code
+code .
+```
+
+Then press **F5** (or go to **Run → Start Debugging**). A new VS Code window opens with the extension active.
+
+---
+
 ## Requirements
 
 - VS Code 1.85 or later
