@@ -1,6 +1,5 @@
 import * as vscode from 'vscode';
 import type { ConnectionManager } from '../database/ConnectionManager';
-import { ResultsPanel } from './ResultsPanel';
 
 function getNonce(): string {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -35,7 +34,8 @@ export class QueryConsolePanel {
 
   private async handleMessage(msg: WebviewMsg): Promise<void> {
     if (!msg.sql || !msg.connectionId) return;
-    const { sql, connectionId } = msg;
+    const sql = msg.sql.trim().replace(/;+$/, '');
+    const { connectionId } = msg;
 
     let adapter;
     try {
@@ -45,21 +45,16 @@ export class QueryConsolePanel {
       return;
     }
 
-    const resultsPanel = ResultsPanel.show(this.extensionUri);
-
     try {
       if (msg.type === 'run') {
         const result = await adapter.query(sql);
-        resultsPanel.showResult(result);
-        void this.panel.webview.postMessage({ type: 'queryEnd', executionTimeMs: result.executionTimeMs });
+        void this.panel.webview.postMessage({ type: 'result', data: result });
       } else if (msg.type === 'explain') {
         const node = await adapter.explain(sql);
-        resultsPanel.showExplain(node);
-        void this.panel.webview.postMessage({ type: 'queryEnd', executionTimeMs: 0 });
+        void this.panel.webview.postMessage({ type: 'explainResult', data: node });
       }
     } catch (err) {
       const message = (err as Error).message;
-      resultsPanel.showError(message);
       void this.panel.webview.postMessage({ type: 'error', message });
     }
   }
