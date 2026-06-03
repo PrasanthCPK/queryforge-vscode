@@ -14,6 +14,7 @@ export interface QueryResult {
   columns: string[];
   rows: Record<string, unknown>[];
   rowCount: number;
+  totalRows?: number;
   executionTimeMs: number;
 }
 

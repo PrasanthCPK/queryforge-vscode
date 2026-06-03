@@ -10,6 +10,7 @@ interface QueryResult {
   columns: string[];
   rows: Record<string, unknown>[];
   rowCount: number;
+  totalRows?: number;
   executionTimeMs: number;
 }
 
@@ -20,11 +21,12 @@ interface ExplainNode {
   children: ExplainNode[];
 }
 
-acquireVsCodeApi();
+const vscode = acquireVsCodeApi();
 
 const PAGE_SIZE = 50;
 let currentResult: QueryResult | null = null;
 let currentPage = 0;
+let totalPages = 1;
 let sortCol = -1;
 let sortDir: 'asc' | 'desc' = 'asc';
 
@@ -85,6 +87,18 @@ document.body.innerHTML = `
     padding: 0 8px;
     white-space: nowrap;
   }
+  #clearBtn {
+    background: none;
+    border: none;
+    color: var(--desc);
+    cursor: pointer;
+    font-size: 13px;
+    padding: 4px 8px;
+    border-radius: 3px;
+    transition: color 0.1s, background 0.1s;
+    flex-shrink: 0;
+  }
+  #clearBtn:hover { color: var(--error); background: var(--hover-bg); }
   .tab-panel { flex: 1; overflow: auto; display: flex; flex-direction: column; }
   .hidden { display: none !important; }
   .placeholder {
@@ -190,6 +204,7 @@ document.body.innerHTML = `
   <button class="tab-btn active" data-tab="results">Results</button>
   <button class="tab-btn" data-tab="explain">Explain Plan</button>
   <span id="meta"></span>
+  <button id="clearBtn" title="Clear results">✕ Clear</button>
 </div>
 <div id="tab-results" class="tab-panel">
   <p class="placeholder">Run a query to see results.</p>
@@ -202,6 +217,19 @@ document.body.innerHTML = `
 const metaEl = document.getElementById('meta') as HTMLSpanElement;
 const resultsPanel = document.getElementById('tab-results') as HTMLDivElement;
 const explainPanel = document.getElementById('tab-explain') as HTMLDivElement;
+const clearBtn = document.getElementById('clearBtn') as HTMLButtonElement;
+
+clearBtn.addEventListener('click', () => {
+  currentResult = null;
+  currentPage = 0;
+  totalPages = 1;
+  sortCol = -1;
+  sortDir = 'asc';
+  metaEl.textContent = '';
+  resultsPanel.innerHTML = '<p class="placeholder">Run a query to see results.</p>';
+  explainPanel.innerHTML = '<p class="placeholder">Run Explain to see the execution plan.</p>';
+  switchTab('results');
+});
 
 document.querySelectorAll<HTMLButtonElement>('.tab-btn').forEach(btn => {
   btn.addEventListener('click', () => switchTab(btn.dataset['tab']!));
@@ -220,14 +248,25 @@ window.addEventListener('message', (e: MessageEvent) => {
     type: string;
     data?: QueryResult | ExplainNode;
     message?: string;
+    page?: number;
   };
 
   switch (msg.type) {
     case 'result': {
-      currentResult = msg.data as QueryResult;
-      currentPage = 0;
-      sortCol = -1;
-      sortDir = 'asc';
+      const result = msg.data as QueryResult;
+      const total = result.totalRows ?? result.rowCount;
+      totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+      if (msg.page !== undefined) {
+        currentPage = msg.page;
+        currentResult = result;
+        sortCol = -1;
+        sortDir = 'asc';
+      } else {
+        currentResult = result;
+        currentPage = 0;
+        sortCol = -1;
+        sortDir = 'asc';
+      }
       renderTable();
       switchTab('results');
       break;
@@ -248,19 +287,18 @@ window.addEventListener('message', (e: MessageEvent) => {
 function renderTable(): void {
   const result = currentResult;
   if (!result) return;
-  metaEl.textContent = `${result.rowCount} row${result.rowCount !== 1 ? 's' : ''} · ${result.executionTimeMs}ms`;
 
-  if (result.rows.length === 0) {
+  const totalRowCount = result.totalRows ?? result.rowCount;
+  metaEl.textContent = `${totalRowCount} row${totalRowCount !== 1 ? 's' : ''} · ${result.executionTimeMs}ms`;
+
+  if (result.rows.length === 0 && currentPage === 0) {
     resultsPanel.innerHTML = '<p class="placeholder">Query returned no rows.</p>';
     return;
   }
 
-  const allRows = sortRows(result);
-  const totalPages = Math.ceil(allRows.length / PAGE_SIZE);
-  if (currentPage >= totalPages) currentPage = totalPages - 1;
-  const pageRows = allRows.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
+  const pageRows = sortRows(result);
   const startRow = currentPage * PAGE_SIZE + 1;
-  const endRow = Math.min((currentPage + 1) * PAGE_SIZE, allRows.length);
+  const endRow = currentPage * PAGE_SIZE + pageRows.length;
 
   const headers = result.columns.map((col, i) => {
     const cls = i === sortCol ? ` class="${sortDir}"` : '';
@@ -278,17 +316,17 @@ function renderTable(): void {
   const paginationHtml = totalPages > 1 ? `
     <div id="pagination">
       <button class="page-btn" id="prevBtn" ${currentPage === 0 ? 'disabled' : ''}>◀ Prev</button>
-      <span id="page-info">Rows ${startRow}–${endRow} of ${result.rowCount} · Page ${currentPage + 1} of ${totalPages}</span>
+      <span id="page-info">Rows ${startRow}–${endRow} of ${totalRowCount} · Page ${currentPage + 1} of ${totalPages}</span>
       <button class="page-btn" id="nextBtn" ${currentPage >= totalPages - 1 ? 'disabled' : ''}>Next ▶</button>
     </div>` : `
     <div id="pagination">
-      <span id="page-info">Rows 1–${result.rowCount} of ${result.rowCount}</span>
+      <span id="page-info">Rows 1–${pageRows.length} of ${totalRowCount}</span>
     </div>`;
 
   resultsPanel.innerHTML = `
     <div id="export-bar">
       <button class="export-btn" id="csvBtn">⬇ Export CSV</button>
-      <span class="meta">${result.rowCount} row${result.rowCount !== 1 ? 's' : ''} · ${result.executionTimeMs}ms</span>
+      <span class="meta">${totalRowCount} row${totalRowCount !== 1 ? 's' : ''} · ${result.executionTimeMs}ms</span>
     </div>
     <div id="table-wrap">
       <table>
@@ -304,14 +342,17 @@ function renderTable(): void {
       const i = parseInt(th.dataset['i']!);
       sortDir = sortCol === i && sortDir === 'asc' ? 'desc' : 'asc';
       sortCol = i;
-      currentPage = 0;
       renderTable();
     });
   });
 
   document.getElementById('csvBtn')!.addEventListener('click', () => exportCsv(result));
-  document.getElementById('prevBtn')?.addEventListener('click', () => { currentPage--; renderTable(); });
-  document.getElementById('nextBtn')?.addEventListener('click', () => { currentPage++; renderTable(); });
+  document.getElementById('prevBtn')?.addEventListener('click', () => {
+    vscode.postMessage({ type: 'page', page: currentPage - 1 });
+  });
+  document.getElementById('nextBtn')?.addEventListener('click', () => {
+    vscode.postMessage({ type: 'page', page: currentPage + 1 });
+  });
 }
 
 function sortRows(result: QueryResult): Record<string, unknown>[] {

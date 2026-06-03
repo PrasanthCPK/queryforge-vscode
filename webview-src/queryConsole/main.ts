@@ -20,6 +20,7 @@ interface QueryResult {
   columns: string[];
   rows: Record<string, unknown>[];
   rowCount: number;
+  totalRows?: number;
   executionTimeMs: number;
 }
 
@@ -39,8 +40,11 @@ interface ResultTab {
   errorMsg: string;
   pinned: boolean;
   page: number;
+  totalPages: number;
   sortCol: number;
   sortDir: 'asc' | 'desc';
+  sql: string;
+  connectionId: string;
 }
 
 const vscode = acquireVsCodeApi();
@@ -122,6 +126,17 @@ document.body.innerHTML = `
   }
   .btn:hover:not(:disabled) { background: var(--btn-hover); }
   .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-secondary {
+    background: var(--tab-bg);
+    color: var(--fg);
+    border: 1px solid var(--border);
+    padding: 5px 14px;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 13px;
+    flex-shrink: 0;
+  }
+  .btn-secondary:hover { background: var(--hover-bg); }
   #status {
     font-size: 12px;
     color: var(--desc);
@@ -184,7 +199,7 @@ document.body.innerHTML = `
     display: flex;
     align-items: center;
     gap: 4px;
-    padding: 6px 12px 6px 14px;
+    padding: 6px 10px 6px 14px;
     background: var(--tab-bg);
     border: none;
     border-right: 1px solid var(--border);
@@ -214,6 +229,18 @@ document.body.innerHTML = `
   }
   .tab-pin:hover { opacity: 1; }
   .tab-pin.pinned { color: var(--pin-active); opacity: 1; }
+  .tab-close {
+    background: none;
+    border: none;
+    color: var(--desc);
+    cursor: pointer;
+    font-size: 13px;
+    padding: 0 2px;
+    line-height: 1;
+    opacity: 0.5;
+    transition: opacity 0.1s, color 0.1s;
+  }
+  .tab-close:hover { opacity: 1; color: var(--error); }
   #results-content {
     flex: 1;
     overflow: auto;
@@ -327,6 +354,18 @@ document.body.innerHTML = `
   .det { font-size: 11px; color: var(--desc); }
   .node-children { margin-left: 20px; border-left: 2px solid var(--border); padding-left: 10px; }
   .node-children.collapsed { display: none; }
+  /* ── Loading overlay ── */
+  .paging-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    color: var(--fg);
+    pointer-events: none;
+  }
 </style>
 
 <div id="editor-section" style="height: 40%">
@@ -336,6 +375,7 @@ document.body.innerHTML = `
     </select>
     <button class="btn" id="runBtn" title="Run query (Ctrl+Enter)">▶ Run</button>
     <button class="btn" id="explainBtn" title="Explain query (Ctrl+Shift+X)">⚡ Explain</button>
+    <button class="btn-secondary" id="scriptBtn" title="Open and run a SQL script file">📂 Run Script</button>
     <span id="status"></span>
   </div>
   <textarea id="sqlEditor" spellcheck="false" placeholder="Enter SQL query here…&#10;&#10;Ctrl+Enter — Run query&#10;Ctrl+Shift+X — Explain query"></textarea>
@@ -356,6 +396,7 @@ document.body.innerHTML = `
 const connSelect = document.getElementById('connSelect') as HTMLSelectElement;
 const runBtn = document.getElementById('runBtn') as HTMLButtonElement;
 const explainBtn = document.getElementById('explainBtn') as HTMLButtonElement;
+const scriptBtn = document.getElementById('scriptBtn') as HTMLButtonElement;
 const statusEl = document.getElementById('status') as HTMLSpanElement;
 const editor = document.getElementById('sqlEditor') as HTMLTextAreaElement;
 const editorSection = document.getElementById('editor-section') as HTMLDivElement;
@@ -392,6 +433,7 @@ document.addEventListener('mouseup', () => {
 function setLoading(loading: boolean): void {
   runBtn.disabled = loading;
   explainBtn.disabled = loading;
+  scriptBtn.disabled = loading;
   if (loading) {
     statusEl.className = '';
     statusEl.textContent = 'Running…';
@@ -410,11 +452,14 @@ function send(type: 'run' | 'explain'): void {
   const connectionId = connSelect.value;
   if (!connectionId) { setStatus('Select a connection first.'); return; }
   setLoading(true);
-  vscode.postMessage({ type, sql, connectionId });
+  vscode.postMessage({ type, sql, connectionId, page: 0 });
 }
 
 runBtn.addEventListener('click', () => send('run'));
 explainBtn.addEventListener('click', () => send('explain'));
+scriptBtn.addEventListener('click', () => {
+  vscode.postMessage({ type: 'openScript' });
+});
 
 editor.addEventListener('keydown', (e: KeyboardEvent) => {
   if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
@@ -447,8 +492,11 @@ function newTab(label: string): ResultTab {
     errorMsg: '',
     pinned: false,
     page: 0,
+    totalPages: 1,
     sortCol: -1,
     sortDir: 'asc',
+    sql: '',
+    connectionId: '',
   };
 }
 
@@ -457,6 +505,7 @@ function getOrCreateTargetTab(label: string): ResultTab {
   if (unpinned) {
     unpinned.label = label;
     unpinned.page = 0;
+    unpinned.totalPages = 1;
     unpinned.sortCol = -1;
     unpinned.sortDir = 'asc';
     return unpinned;
@@ -464,6 +513,17 @@ function getOrCreateTargetTab(label: string): ResultTab {
   const tab = newTab(label);
   tabs.push(tab);
   return tab;
+}
+
+function closeTab(tabId: string): void {
+  const idx = tabs.findIndex(t => t.id === tabId);
+  if (idx < 0) return;
+  tabs.splice(idx, 1);
+  if (activeTabId === tabId) {
+    activeTabId = tabs.length > 0 ? tabs[Math.max(0, idx - 1)].id : null;
+  }
+  renderTabsBar();
+  renderActiveTab();
 }
 
 function renderTabsBar(): void {
@@ -488,6 +548,16 @@ function renderTabsBar(): void {
       renderTabsBar();
     });
     btn.appendChild(pinBtn);
+
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'tab-close';
+    closeBtn.title = 'Close tab';
+    closeBtn.textContent = '×';
+    closeBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      closeTab(tab.id);
+    });
+    btn.appendChild(closeBtn);
 
     btn.addEventListener('click', () => {
       activeTabId = tab.id;
@@ -520,7 +590,7 @@ function renderActiveTab(): void {
   }
 }
 
-// ── Table rendering with pagination ──────────────────────────────────────────
+// ── Table rendering with server-side pagination ───────────────────────────────
 function sortedRows(tab: ResultTab): Record<string, unknown>[] {
   const result = tab.resultData!;
   const rows = [...result.rows];
@@ -537,24 +607,23 @@ function renderTable(tab: ResultTab): void {
   const result = tab.resultData!;
   resultsContent.innerHTML = '';
 
-  if (result.rows.length === 0) {
+  const totalRows = result.totalRows ?? result.rowCount;
+
+  if (result.rows.length === 0 && tab.page === 0) {
     resultsContent.innerHTML = `
       <div id="export-bar">
         <button class="export-btn" id="csvBtn">⬇ Export CSV</button>
-        <span class="meta">${result.rowCount} row${result.rowCount !== 1 ? 's' : ''} · ${result.executionTimeMs}ms</span>
+        <span class="meta">${totalRows} row${totalRows !== 1 ? 's' : ''} · ${result.executionTimeMs}ms</span>
       </div>
       <p class="placeholder">Query returned no rows.</p>`;
     document.getElementById('csvBtn')!.addEventListener('click', () => exportCsv(result));
     return;
   }
 
-  const allRows = sortedRows(tab);
-  const totalPages = Math.ceil(allRows.length / PAGE_SIZE);
-  if (tab.page >= totalPages) tab.page = totalPages - 1;
-  const pageRows = allRows.slice(tab.page * PAGE_SIZE, (tab.page + 1) * PAGE_SIZE);
-
+  const pageRows = sortedRows(tab);
   const startRow = tab.page * PAGE_SIZE + 1;
-  const endRow = Math.min((tab.page + 1) * PAGE_SIZE, allRows.length);
+  const endRow = tab.page * PAGE_SIZE + pageRows.length;
+  const totalPages = tab.totalPages;
 
   const headers = result.columns.map((col, i) => {
     const cls = i === tab.sortCol ? ` class="${tab.sortDir}"` : '';
@@ -573,7 +642,7 @@ function renderTable(tab: ResultTab): void {
   exportBar.id = 'export-bar';
   exportBar.innerHTML = `
     <button class="export-btn" id="csvBtn">⬇ Export CSV</button>
-    <span class="meta">${result.rowCount} row${result.rowCount !== 1 ? 's' : ''} · ${result.executionTimeMs}ms</span>
+    <span class="meta">${totalRows} row${totalRows !== 1 ? 's' : ''} · ${result.executionTimeMs}ms</span>
   `;
   resultsContent.appendChild(exportBar);
 
@@ -591,19 +660,18 @@ function renderTable(tab: ResultTab): void {
   pagination.id = 'pagination';
   pagination.innerHTML = `
     <button class="page-btn" id="prevBtn" ${tab.page === 0 ? 'disabled' : ''}>◀ Prev</button>
-    <span id="page-info">Rows ${startRow}–${endRow} of ${result.rowCount}${totalPages > 1 ? ` · Page ${tab.page + 1} of ${totalPages}` : ''}</span>
+    <span id="page-info">Rows ${startRow}–${endRow} of ${totalRows}${totalPages > 1 ? ` · Page ${tab.page + 1} of ${totalPages}` : ''}</span>
     <button class="page-btn" id="nextBtn" ${tab.page >= totalPages - 1 ? 'disabled' : ''}>Next ▶</button>
   `;
   resultsContent.appendChild(pagination);
 
   document.getElementById('csvBtn')!.addEventListener('click', () => exportCsv(result));
+
   document.getElementById('prevBtn')?.addEventListener('click', () => {
-    tab.page--;
-    renderTable(tab);
+    requestPage(tab, tab.page - 1);
   });
   document.getElementById('nextBtn')?.addEventListener('click', () => {
-    tab.page++;
-    renderTable(tab);
+    requestPage(tab, tab.page + 1);
   });
 
   resultsContent.querySelectorAll<HTMLTableCellElement>('thead th').forEach(th => {
@@ -611,10 +679,15 @@ function renderTable(tab: ResultTab): void {
       const i = parseInt(th.dataset['i']!);
       tab.sortDir = tab.sortCol === i && tab.sortDir === 'asc' ? 'desc' : 'asc';
       tab.sortCol = i;
-      tab.page = 0;
       renderTable(tab);
     });
   });
+}
+
+function requestPage(tab: ResultTab, page: number): void {
+  if (!tab.sql || !tab.connectionId) return;
+  setStatus('Loading…');
+  vscode.postMessage({ type: 'page', sql: tab.sql, connectionId: tab.connectionId, page, tabId: tab.id });
 }
 
 function exportCsv(result: QueryResult): void {
@@ -667,9 +740,11 @@ window.addEventListener('message', (event: MessageEvent) => {
     type: string;
     list?: Connection[];
     data?: QueryResult | ExplainNode;
-    executionTimeMs?: number;
     message?: string;
     connectionId?: string;
+    page?: number;
+    tabId?: string;
+    sql?: string;
   };
 
   switch (msg.type) {
@@ -679,6 +754,8 @@ window.addEventListener('message', (event: MessageEvent) => {
 
     case 'result': {
       const result = msg.data as QueryResult;
+      const totalRows = result.totalRows ?? result.rowCount;
+      const totalPages = Math.max(1, Math.ceil(totalRows / PAGE_SIZE));
       const label = `Query ${tabCounter + 1}`;
       const tab = getOrCreateTargetTab(label);
       tab.type = 'result';
@@ -686,14 +763,33 @@ window.addEventListener('message', (event: MessageEvent) => {
       tab.explainData = null;
       tab.errorMsg = '';
       tab.page = 0;
+      tab.totalPages = totalPages;
       tab.sortCol = -1;
       tab.sortDir = 'asc';
+      tab.sql = editor.value.trim().replace(/;+$/, '');
+      tab.connectionId = connSelect.value;
       if (!tabs.includes(tab)) tabs.push(tab);
       activeTabId = tab.id;
       setLoading(false);
-      setStatus(`Done in ${result.executionTimeMs}ms`);
+      setStatus(`Done in ${result.executionTimeMs}ms · ${totalRows} row${totalRows !== 1 ? 's' : ''}`);
       renderTabsBar();
       renderActiveTab();
+      break;
+    }
+
+    case 'pageResult': {
+      const result = msg.data as QueryResult;
+      const tab = tabs.find(t => t.id === msg.tabId) ?? tabs.find(t => t.id === activeTabId);
+      if (!tab) break;
+      const totalRows = result.totalRows ?? result.rowCount;
+      const totalPages = Math.max(1, Math.ceil(totalRows / PAGE_SIZE));
+      tab.resultData = result;
+      tab.page = msg.page ?? tab.page;
+      tab.totalPages = totalPages;
+      tab.sortCol = -1;
+      tab.sortDir = 'asc';
+      setStatus(`Page ${tab.page + 1} of ${totalPages}`);
+      if (tab.id === activeTabId) renderTable(tab);
       break;
     }
 
@@ -737,6 +833,14 @@ window.addEventListener('message', (event: MessageEvent) => {
 
     case 'selectConnection':
       if (msg.connectionId) connSelect.value = msg.connectionId;
+      break;
+
+    case 'loadScript':
+      if (msg.sql !== undefined) {
+        editor.value = msg.sql;
+        editor.focus();
+        send('run');
+      }
       break;
   }
 });

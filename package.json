@@ -3,7 +3,7 @@
   "displayName": "Query Forge",
   "description": "Execute SQL queries and visualize execution plans for MySQL/MariaDB and Oracle",
   "version": "0.1.0",
-  "publisher": "queryforge",
+  "publisher": "PC",
   "repository": {
     "type": "git",
     "url": "https://github.com/PrasanthCPK/queryforge-vscode"
@@ -24,7 +24,8 @@
     "onCommand:queryforge.explainQuery",
     "onCommand:queryforge.connectProfile",
     "onCommand:queryforge.disconnectProfile",
-    "onCommand:queryforge.refreshConnections"
+    "onCommand:queryforge.refreshConnections",
+    "onCommand:queryforge.runSqlScript"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -87,6 +88,10 @@
         "command": "queryforge.refreshConnections",
         "title": "Query Forge: Refresh Connections",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "queryforge.runSqlScript",
+        "title": "Query Forge: Run SQL Script"
       }
     ],
     "menus": {
