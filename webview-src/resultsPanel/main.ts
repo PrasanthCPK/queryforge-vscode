@@ -1,3 +1,5 @@
+export {};
+
 declare function acquireVsCodeApi(): {
   postMessage(msg: unknown): void;
   getState(): unknown;
@@ -19,6 +21,12 @@ interface ExplainNode {
 }
 
 acquireVsCodeApi();
+
+const PAGE_SIZE = 50;
+let currentResult: QueryResult | null = null;
+let currentPage = 0;
+let sortCol = -1;
+let sortDir: 'asc' | 'desc' = 'asc';
 
 document.body.innerHTML = `
 <style>
@@ -90,7 +98,11 @@ document.body.innerHTML = `
     background: var(--header-bg);
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
   }
+  #export-bar .meta { font-size: 12px; color: var(--desc); margin-left: auto; }
   .export-btn {
     background: var(--btn-bg);
     color: var(--btn-fg);
@@ -102,6 +114,28 @@ document.body.innerHTML = `
   }
   .export-btn:hover { background: var(--btn-hover); }
   #table-wrap { flex: 1; overflow: auto; }
+  #pagination {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    background: var(--header-bg);
+    border-top: 1px solid var(--border);
+    flex-shrink: 0;
+    font-size: 12px;
+  }
+  .page-btn {
+    background: var(--tab-bg);
+    color: var(--fg);
+    border: 1px solid var(--border);
+    padding: 2px 10px;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 12px;
+  }
+  .page-btn:hover:not(:disabled) { background: var(--hover-bg); }
+  .page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  #page-info { color: var(--desc); }
   table { border-collapse: collapse; width: 100%; }
   thead th {
     position: sticky;
@@ -181,9 +215,6 @@ function switchTab(name: string): void {
   explainPanel.classList.toggle('hidden', name !== 'explain');
 }
 
-let sortCol = -1;
-let sortDir: 'asc' | 'desc' = 'asc';
-
 window.addEventListener('message', (e: MessageEvent) => {
   const msg = e.data as {
     type: string;
@@ -193,8 +224,11 @@ window.addEventListener('message', (e: MessageEvent) => {
 
   switch (msg.type) {
     case 'result': {
+      currentResult = msg.data as QueryResult;
+      currentPage = 0;
       sortCol = -1;
-      renderTable(msg.data as QueryResult);
+      sortDir = 'asc';
+      renderTable();
       switchTab('results');
       break;
     }
@@ -211,7 +245,9 @@ window.addEventListener('message', (e: MessageEvent) => {
   }
 });
 
-function renderTable(result: QueryResult): void {
+function renderTable(): void {
+  const result = currentResult;
+  if (!result) return;
   metaEl.textContent = `${result.rowCount} row${result.rowCount !== 1 ? 's' : ''} · ${result.executionTimeMs}ms`;
 
   if (result.rows.length === 0) {
@@ -219,14 +255,19 @@ function renderTable(result: QueryResult): void {
     return;
   }
 
-  const sorted = sortRows(result);
+  const allRows = sortRows(result);
+  const totalPages = Math.ceil(allRows.length / PAGE_SIZE);
+  if (currentPage >= totalPages) currentPage = totalPages - 1;
+  const pageRows = allRows.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
+  const startRow = currentPage * PAGE_SIZE + 1;
+  const endRow = Math.min((currentPage + 1) * PAGE_SIZE, allRows.length);
 
   const headers = result.columns.map((col, i) => {
     const cls = i === sortCol ? ` class="${sortDir}"` : '';
     return `<th${cls} data-i="${i}">${esc(col)}</th>`;
   }).join('');
 
-  const body = sorted.map(row =>
+  const body = pageRows.map(row =>
     `<tr>${result.columns.map(col => {
       const v = row[col];
       if (v === null || v === undefined) return `<td class="null">NULL</td>`;
@@ -234,9 +275,20 @@ function renderTable(result: QueryResult): void {
     }).join('')}</tr>`,
   ).join('');
 
+  const paginationHtml = totalPages > 1 ? `
+    <div id="pagination">
+      <button class="page-btn" id="prevBtn" ${currentPage === 0 ? 'disabled' : ''}>◀ Prev</button>
+      <span id="page-info">Rows ${startRow}–${endRow} of ${result.rowCount} · Page ${currentPage + 1} of ${totalPages}</span>
+      <button class="page-btn" id="nextBtn" ${currentPage >= totalPages - 1 ? 'disabled' : ''}>Next ▶</button>
+    </div>` : `
+    <div id="pagination">
+      <span id="page-info">Rows 1–${result.rowCount} of ${result.rowCount}</span>
+    </div>`;
+
   resultsPanel.innerHTML = `
     <div id="export-bar">
       <button class="export-btn" id="csvBtn">⬇ Export CSV</button>
+      <span class="meta">${result.rowCount} row${result.rowCount !== 1 ? 's' : ''} · ${result.executionTimeMs}ms</span>
     </div>
     <div id="table-wrap">
       <table>
@@ -244,6 +296,7 @@ function renderTable(result: QueryResult): void {
         <tbody>${body}</tbody>
       </table>
     </div>
+    ${paginationHtml}
   `;
 
   resultsPanel.querySelectorAll<HTMLTableCellElement>('thead th').forEach(th => {
@@ -251,11 +304,14 @@ function renderTable(result: QueryResult): void {
       const i = parseInt(th.dataset['i']!);
       sortDir = sortCol === i && sortDir === 'asc' ? 'desc' : 'asc';
       sortCol = i;
-      renderTable(result);
+      currentPage = 0;
+      renderTable();
     });
   });
 
   document.getElementById('csvBtn')!.addEventListener('click', () => exportCsv(result));
+  document.getElementById('prevBtn')?.addEventListener('click', () => { currentPage--; renderTable(); });
+  document.getElementById('nextBtn')?.addEventListener('click', () => { currentPage++; renderTable(); });
 }
 
 function sortRows(result: QueryResult): Record<string, unknown>[] {
