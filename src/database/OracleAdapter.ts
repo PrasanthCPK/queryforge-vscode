@@ -52,6 +52,38 @@ export class OracleAdapter implements IAdapter {
     };
   }
 
+  async queryPage(sql: string, page: number, pageSize: number): Promise<QueryResult> {
+    if (!/^\s*SELECT\s/i.test(sql)) {
+      return this.query(sql);
+    }
+    if (!this.connection) throw new Error('Not connected');
+    const offset = page * pageSize;
+    const start = Date.now();
+    const countResult = await this.connection.execute(
+      `SELECT COUNT(*) AS "__total" FROM (${sql})`,
+      [],
+      { outFormat: oracledb.OUT_FORMAT_OBJECT },
+    );
+    const countRows = countResult.rows as Record<string, unknown>[];
+    const totalRows = Number(countRows[0]['__total'] ?? 0);
+    const pageResult = await this.connection.execute(
+      `SELECT * FROM (
+        SELECT t.*, ROWNUM AS "__qf_rn" FROM (${sql}) t WHERE ROWNUM <= ${offset + pageSize}
+      ) WHERE "__qf_rn" > ${offset}`,
+      [],
+      { outFormat: oracledb.OUT_FORMAT_OBJECT },
+    );
+    const executionTimeMs = Date.now() - start;
+    const rawRows = (pageResult.rows as Record<string, unknown>[]).map(r => {
+      const { '__qf_rn': _rn, ...rest } = r;
+      void _rn;
+      return rest;
+    });
+    const columns = (pageResult.metaData?.map((m: { name: string }) => m.name) ?? [])
+      .filter((n: string) => n !== '__qf_rn');
+    return { columns, rows: rawRows, rowCount: rawRows.length, totalRows, executionTimeMs };
+  }
+
   async explain(sql: string): Promise<ExplainNode> {
     if (!this.connection) throw new Error('Not connected');
     const stmtId = `QF_${Date.now()}`;

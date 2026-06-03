@@ -48,6 +48,27 @@ export class MySQLAdapter implements IAdapter {
     };
   }
 
+  async queryPage(sql: string, page: number, pageSize: number): Promise<QueryResult> {
+    if (!/^\s*SELECT\s/i.test(sql)) {
+      return this.query(sql);
+    }
+    if (!this.pool) throw new Error('Not connected');
+    const offset = page * pageSize;
+    const start = Date.now();
+    const [countRows] = await this.pool.query(
+      `SELECT COUNT(*) AS __total FROM (${sql}) AS __qf_count`,
+    );
+    const totalRows = Number((countRows as Record<string, unknown>[])[0]['__total'] ?? 0);
+    const [rows, fields] = await this.pool.query(
+      `SELECT * FROM (${sql}) AS __qf_data LIMIT ${pageSize} OFFSET ${offset}`,
+    );
+    const executionTimeMs = Date.now() - start;
+    const resultRows = rows as Record<string, unknown>[];
+    const fieldPackets = fields as mysql.FieldPacket[] | undefined;
+    const columns = fieldPackets?.map(f => f.name) ?? Object.keys(resultRows[0] ?? {});
+    return { columns, rows: resultRows, rowCount: resultRows.length, totalRows, executionTimeMs };
+  }
+
   async explain(sql: string): Promise<ExplainNode> {
     if (!this.pool) throw new Error('Not connected');
     const [rows] = await this.pool.query(`EXPLAIN FORMAT=JSON ${sql}`);

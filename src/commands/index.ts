@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import * as fs from 'fs';
 import type { Connection, DbType } from '../types';
 import type { ConnectionManager } from '../database/ConnectionManager';
 import type { ConnectionTreeProvider } from '../providers/ConnectionTreeProvider';
@@ -96,6 +97,18 @@ export function registerCommands(
   reg('queryforge.explainQuery', async (sqlArg?: string) => {
     await runOrExplain('explain', sqlArg, manager, context.extensionUri, treeProvider);
   });
+
+  reg('queryforge.runSqlScript', async () => {
+    const uris = await vscode.window.showOpenDialog({
+      canSelectMany: false,
+      filters: { 'SQL Files': ['sql'], 'All Files': ['*'] },
+      title: 'Open SQL Script',
+    });
+    if (!uris || !uris[0]) return;
+    const sql = fs.readFileSync(uris[0].fsPath, 'utf8').trim().replace(/;+$/, '');
+    if (!sql) { vscode.window.showErrorMessage('SQL file is empty.'); return; }
+    await runOrExplain('run', sql, manager, context.extensionUri, treeProvider);
+  });
 }
 
 async function runOrExplain(
@@ -156,14 +169,15 @@ async function runOrExplain(
   const adapter = manager.getAdapter(connectionId)!;
   const resultsPanel = ResultsPanel.show(extensionUri);
   const label = mode === 'run' ? 'Executing query…' : 'Explaining query…';
+  const PAGE_SIZE = 50;
 
   try {
     await vscode.window.withProgress(
       { location: vscode.ProgressLocation.Notification, title: label },
       async () => {
         if (mode === 'run') {
-          const result = await adapter.query(sql!);
-          resultsPanel.showResult(result);
+          const result = await adapter.queryPage(sql!, 0, PAGE_SIZE);
+          resultsPanel.showResult(result, sql!, adapter);
         } else {
           const node = await adapter.explain(sql!);
           resultsPanel.showExplain(node);

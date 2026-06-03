@@ -2,8 +2,6 @@ import * as vscode from 'vscode';
 import { randomUUID } from 'crypto';
 import type { Connection, DbType } from '../types';
 import type { IAdapter } from './IAdapter';
-import { MySQLAdapter } from './MySQLAdapter';
-import { OracleAdapter } from './OracleAdapter';
 
 const CONNECTIONS_KEY = 'queryforge.connections';
 
@@ -83,9 +81,17 @@ export class ConnectionManager {
   }
 
   private createAdapter(conn: Connection): IAdapter {
-    const type: DbType = conn.dbType;
-    if (type === 'mysql') return new MySQLAdapter(conn);
-    if (type === 'oracle') return new OracleAdapter(conn);
-    throw new Error(`Unsupported database type: ${type}`);
+    const dbType: DbType = conn.dbType;
+    if (dbType === 'mysql') {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const mysqlMod = require('./MySQLAdapter') as typeof import('./MySQLAdapter');
+      return new mysqlMod.MySQLAdapter(conn);
+    }
+    if (dbType === 'oracle') {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const oracleMod = require('./OracleAdapter') as typeof import('./OracleAdapter');
+      return new oracleMod.OracleAdapter(conn);
+    }
+    throw new Error(`Unsupported database type: ${dbType}`);
   }
 }

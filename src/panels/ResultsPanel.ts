@@ -1,5 +1,8 @@
 import * as vscode from 'vscode';
 import type { QueryResult, ExplainNode } from '../types';
+import type { IAdapter } from '../database/IAdapter';
+
+const PAGE_SIZE = 50;
 
 function getNonce(): string {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -9,6 +12,8 @@ function getNonce(): string {
 export class ResultsPanel {
   private static instance: ResultsPanel | undefined;
   private readonly panel: vscode.WebviewPanel;
+  private currentSql: string | undefined;
+  private currentAdapter: IAdapter | undefined;
 
   private constructor(
     panel: vscode.WebviewPanel,
@@ -19,6 +24,20 @@ export class ResultsPanel {
       ResultsPanel.instance = undefined;
     });
     this.panel.webview.html = this.buildHtml();
+    this.panel.webview.onDidReceiveMessage((msg: { type: string; page?: number }) => {
+      void this.handleMessage(msg);
+    });
+  }
+
+  private async handleMessage(msg: { type: string; page?: number }): Promise<void> {
+    if (msg.type === 'page' && msg.page !== undefined && this.currentSql && this.currentAdapter) {
+      try {
+        const result = await this.currentAdapter.queryPage(this.currentSql, msg.page, PAGE_SIZE);
+        void this.panel.webview.postMessage({ type: 'result', data: result, page: msg.page });
+      } catch (err) {
+        void this.panel.webview.postMessage({ type: 'error', message: (err as Error).message });
+      }
+    }
   }
 
   static show(extensionUri: vscode.Uri): ResultsPanel {
@@ -36,7 +55,9 @@ export class ResultsPanel {
     return ResultsPanel.instance;
   }
 
-  showResult(result: QueryResult): void {
+  showResult(result: QueryResult, sql?: string, adapter?: IAdapter): void {
+    this.currentSql = sql;
+    this.currentAdapter = adapter;
     this.panel.reveal(vscode.ViewColumn.Two, true);
     void this.panel.webview.postMessage({ type: 'result', data: result });
   }
