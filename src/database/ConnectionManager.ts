@@ -81,17 +81,17 @@ export class ConnectionManager {
   }
 
   private createAdapter(conn: Connection): IAdapter {
-    const type: DbType = conn.dbType;
-    if (type === 'mysql') {
+    const dbType: DbType = conn.dbType;
+    if (dbType === 'mysql') {
       // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const { MySQLAdapter } = require('./MySQLAdapter') as typeof import('./MySQLAdapter');
-      return new MySQLAdapter(conn);
+      const mysqlMod = require('./MySQLAdapter') as typeof import('./MySQLAdapter');
+      return new mysqlMod.MySQLAdapter(conn);
     }
-    if (type === 'oracle') {
+    if (dbType === 'oracle') {
       // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const { OracleAdapter } = require('./OracleAdapter') as typeof import('./OracleAdapter');
-      return new OracleAdapter(conn);
+      const oracleMod = require('./OracleAdapter') as typeof import('./OracleAdapter');
+      return new oracleMod.OracleAdapter(conn);
     }
-    throw new Error(`Unsupported database type: ${type}`);
+    throw new Error(`Unsupported database type: ${dbType}`);
   }
 }
