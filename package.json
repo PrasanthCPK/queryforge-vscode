@@ -15,7 +15,16 @@
   "activationEvents": [
     "onLanguage:sql",
     "onView:queryforgeConnections",
-    "onCommand:queryforge.openConsole"
+    "onCommand:queryforge.openConsole",
+    "onCommand:queryforge.addConnection",
+    "onCommand:queryforge.editConnection",
+    "onCommand:queryforge.deleteConnection",
+    "onCommand:queryforge.testConnection",
+    "onCommand:queryforge.runQuery",
+    "onCommand:queryforge.explainQuery",
+    "onCommand:queryforge.connectProfile",
+    "onCommand:queryforge.disconnectProfile",
+    "onCommand:queryforge.refreshConnections"
   ],
   "main": "./dist/extension.js",
   "contributes": {
