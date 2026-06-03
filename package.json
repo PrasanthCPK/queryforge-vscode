@@ -4,6 +4,10 @@
   "description": "Execute SQL queries and visualize execution plans for MySQL/MariaDB and Oracle",
   "version": "0.1.0",
   "publisher": "queryforge",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/PrasanthCPK/queryforge-vscode"
+  },
   "engines": {
     "vscode": "^1.85.0"
   },
