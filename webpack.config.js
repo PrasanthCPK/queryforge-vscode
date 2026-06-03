@@ -17,7 +17,6 @@ module.exports = [
     externals: {
       vscode: 'commonjs vscode',
       mysql2: 'commonjs mysql2',
-      oracledb: 'commonjs oracledb',
     },
     resolve: {
       extensions: ['.ts', '.js'],

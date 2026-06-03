@@ -88,19 +88,9 @@ export class ConnectionManager {
       return new mysqlMod.MySQLAdapter(conn);
     }
     if (dbType === 'oracle') {
-      // Loaded lazily so that a missing oracledb native module does not prevent
-      // the extension from starting. If oracledb is not installed the error is
-      // surfaced here at connection time rather than at extension activation.
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const oracleMod = require('./OracleAdapter') as typeof import('./OracleAdapter');
-        return new oracleMod.OracleAdapter(conn);
-      } catch {
-        throw new Error(
-          'Oracle support requires the oracledb package. ' +
-          'Install it in the extension host: npm install oracledb',
-        );
-      }
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const oracleMod = require('./OracleAdapter') as typeof import('./OracleAdapter');
+      return new oracleMod.OracleAdapter(conn);
     }
     throw new Error(`Unsupported database type: ${dbType}`);
   }
