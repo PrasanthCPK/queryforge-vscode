@@ -15,11 +15,13 @@ interface PlanRow {
 }
 
 // Deferred so a missing oracledb install doesn't prevent extension activation.
+// The manual default-export unwrap mirrors what esModuleInterop does for static imports.
 let _oracledb: typeof oracledbType | null = null;
 function oracledb(): typeof oracledbType {
   if (!_oracledb) {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
-    _oracledb = require('oracledb') as typeof oracledbType;
+    const mod = require('oracledb');
+    _oracledb = (mod.default ?? mod) as typeof oracledbType;
   }
   return _oracledb;
 }
