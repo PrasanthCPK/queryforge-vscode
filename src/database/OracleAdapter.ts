@@ -1,4 +1,4 @@
-import oracledb from 'oracledb';
+import type oracledbType from 'oracledb';
 import { randomUUID } from 'crypto';
 import type { Connection } from '../types';
 import type { QueryResult, ExplainNode } from '../types';
@@ -14,15 +14,26 @@ interface PlanRow {
   COST: number | null;
 }
 
+// Deferred so a missing oracledb install doesn't prevent extension activation.
+let _oracledb: typeof oracledbType | null = null;
+function oracledb(): typeof oracledbType {
+  if (!_oracledb) {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    _oracledb = require('oracledb') as typeof oracledbType;
+  }
+  return _oracledb;
+}
+
 export class OracleAdapter implements IAdapter {
-  private connection: oracledb.Connection | null = null;
+  private connection: oracledbType.Connection | null = null;
   private connected = false;
 
   constructor(private readonly config: Connection) {}
 
   async connect(password: string): Promise<void> {
-    oracledb.outFormat = oracledb.OUT_FORMAT_OBJECT;
-    this.connection = await oracledb.getConnection({
+    const odb = oracledb();
+    odb.outFormat = odb.OUT_FORMAT_OBJECT;
+    this.connection = await odb.getConnection({
       user: this.config.username,
       password,
       connectString: `${this.config.host}:${this.config.port}/${this.config.database}`,
@@ -32,9 +43,10 @@ export class OracleAdapter implements IAdapter {
 
   async query(sql: string): Promise<QueryResult> {
     if (!this.connection) throw new Error('Not connected');
+    const odb = oracledb();
     const start = Date.now();
     const result = await this.connection.execute(sql, [], {
-      outFormat: oracledb.OUT_FORMAT_OBJECT,
+      outFormat: odb.OUT_FORMAT_OBJECT,
     });
     const executionTimeMs = Date.now() - start;
 
@@ -57,12 +69,13 @@ export class OracleAdapter implements IAdapter {
       return this.query(sql);
     }
     if (!this.connection) throw new Error('Not connected');
+    const odb = oracledb();
     const offset = page * pageSize;
     const start = Date.now();
     const countResult = await this.connection.execute(
       `SELECT COUNT(*) AS "__total" FROM (${sql})`,
       [],
-      { outFormat: oracledb.OUT_FORMAT_OBJECT },
+      { outFormat: odb.OUT_FORMAT_OBJECT },
     );
     const countRows = countResult.rows as Record<string, unknown>[];
     const totalRows = Number(countRows[0]['__total'] ?? 0);
@@ -71,11 +84,12 @@ export class OracleAdapter implements IAdapter {
         SELECT t.*, ROWNUM AS "__qf_rn" FROM (${sql}) t WHERE ROWNUM <= ${offset + pageSize}
       ) WHERE "__qf_rn" > ${offset}`,
       [],
-      { outFormat: oracledb.OUT_FORMAT_OBJECT },
+      { outFormat: odb.OUT_FORMAT_OBJECT },
     );
     const executionTimeMs = Date.now() - start;
     const rawRows = (pageResult.rows as Record<string, unknown>[]).map(r => {
-      const { '__qf_rn': _, ...rest } = r;
+      const { '__qf_rn': _rn, ...rest } = r;
+      void _rn;
       return rest;
     });
     const columns = (pageResult.metaData?.map((m: { name: string }) => m.name) ?? []).filter(n => n !== '__qf_rn');
@@ -84,6 +98,7 @@ export class OracleAdapter implements IAdapter {
 
   async explain(sql: string): Promise<ExplainNode> {
     if (!this.connection) throw new Error('Not connected');
+    const odb = oracledb();
     const stmtId = `QF_${Date.now()}`;
 
     await this.connection.execute(
@@ -96,7 +111,7 @@ export class OracleAdapter implements IAdapter {
        WHERE STATEMENT_ID = :stmtId
        ORDER BY ID`,
       { stmtId },
-      { outFormat: oracledb.OUT_FORMAT_OBJECT },
+      { outFormat: odb.OUT_FORMAT_OBJECT },
     );
 
     await this.connection.execute(

@@ -13,6 +13,7 @@
   },
   "categories": ["Other"],
   "activationEvents": [
+    "onStartupFinished",
     "onLanguage:sql",
     "onView:queryforgeConnections",
     "onCommand:queryforge.openConsole",
