@@ -6,6 +6,7 @@ import type { ConnectionTreeProvider } from '../providers/ConnectionTreeProvider
 import { ConnectionItem } from '../providers/ConnectionTreeProvider';
 import { QueryConsolePanel } from '../panels/QueryConsolePanel';
 import { ResultsPanel } from '../panels/ResultsPanel';
+import { ExplainPanel } from '../panels/ExplainPanel';
 
 export function registerCommands(
   context: vscode.ExtensionContext,
@@ -167,27 +168,39 @@ async function runOrExplain(
   }
 
   const adapter = manager.getAdapter(connectionId)!;
-  const resultsPanel = ResultsPanel.show(extensionUri);
   const label = mode === 'run' ? 'Executing query…' : 'Explaining query…';
   const PAGE_SIZE = 50;
 
-  try {
-    await vscode.window.withProgress(
-      { location: vscode.ProgressLocation.Notification, title: label },
-      async () => {
-        if (mode === 'run') {
+  if (mode === 'run') {
+    const resultsPanel = ResultsPanel.show(extensionUri);
+    try {
+      await vscode.window.withProgress(
+        { location: vscode.ProgressLocation.Notification, title: label },
+        async () => {
           const result = await adapter.queryPage(sql!, 0, PAGE_SIZE);
           resultsPanel.showResult(result, sql!, adapter);
-        } else {
+        },
+      );
+    } catch (err) {
+      const message = (err as Error).message;
+      resultsPanel.showError(message);
+      vscode.window.showErrorMessage(`Query failed: ${message}`);
+    }
+  } else {
+    const explainPanel = ExplainPanel.show(extensionUri);
+    try {
+      await vscode.window.withProgress(
+        { location: vscode.ProgressLocation.Notification, title: label },
+        async () => {
           const node = await adapter.explain(sql!);
-          resultsPanel.showExplain(node);
-        }
-      },
-    );
-  } catch (err) {
-    const message = (err as Error).message;
-    resultsPanel.showError(message);
-    vscode.window.showErrorMessage(`Query failed: ${message}`);
+          explainPanel.showExplain(node);
+        },
+      );
+    } catch (err) {
+      const message = (err as Error).message;
+      explainPanel.showError(message);
+      vscode.window.showErrorMessage(`Query failed: ${message}`);
+    }
   }
 }
 

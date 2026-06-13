@@ -79,4 +79,27 @@ module.exports = [
     },
     devtool: 'nosources-source-map',
   },
+  // Explain Panel webview bundle (browser)
+  {
+    target: 'web',
+    mode: 'none',
+    entry: './webview-src/explainPanel/main.ts',
+    output: {
+      path: path.resolve(__dirname, 'dist'),
+      filename: 'webview-explainPanel.js',
+    },
+    resolve: {
+      extensions: ['.ts', '.js'],
+    },
+    module: {
+      rules: [
+        {
+          test: /\.ts$/,
+          exclude: /node_modules/,
+          use: [{ loader: 'ts-loader', options: { configFile: 'tsconfig.json' } }],
+        },
+      ],
+    },
+    devtool: 'nosources-source-map',
+  },
 ];
